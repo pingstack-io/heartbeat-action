@@ -1,0 +1,60 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  script:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run the script tests
+        shell: bash
+        run: test/run.sh
+
+  action:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      PINGSTACK_TEST_BASE_URL: http://127.0.0.1:48218
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start a stub Pingstack
+        shell: bash
+        run: |
+          python_bin="$(command -v python3 || command -v python)"
+          "$python_bin" test/stub_server.py --port 48218 --log "$RUNNER_TEMP/requests" &
+          for _ in $(seq 1 50); do curl -sf -o /dev/null "$PINGSTACK_TEST_BASE_URL/__ready" && break; sleep 0.1; done
+      - name: Report success
+        id: success
+        uses: ./
+        with:
+          ping-url: ${{ env.PINGSTACK_TEST_BASE_URL }}/ping/test-token
+          value: "12"
+          fail-on-error: true
+      - name: Report a failure
+        uses: ./
+        with:
+          ping-url: ${{ env.PINGSTACK_TEST_BASE_URL }}/ping/test-token
+          status: failure
+          fail-on-error: true
+      - name: Check what the stub received
+        shell: bash
+        env:
+          HTTP_STATUS: ${{ steps.success.outputs.http-status }}
+        run: |
+          cat "$RUNNER_TEMP/requests"
+          test "$HTTP_STATUS" = "200"
+          grep -q "^POST /ping/test-token?value=12	Test run #$GITHUB_RUN_NUMBER success: " "$RUNNER_TEMP/requests"
+          grep -q "^POST /ping/test-token/fail	Test run #$GITHUB_RUN_NUMBER failure: " "$RUNNER_TEMP/requests"

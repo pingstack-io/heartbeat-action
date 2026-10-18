@@ -1,0 +1,55 @@
+name: Pingstack Heartbeat
+description: Report each scheduled workflow run to a Pingstack heartbeat check, so a missed or failed run alerts you.
+author: Pingstack
+branding:
+  icon: activity
+  color: green
+
+inputs:
+  ping-url:
+    description: The heartbeat check's ping URL. Store it as a repository secret, for example secrets.PINGSTACK_PING_URL.
+    required: true
+  status:
+    description: "The result to report: success, failure, cancelled or skipped. Defaults to the job's status."
+    required: false
+    default: ${{ job.status }}
+  value:
+    description: An optional number, checked against the check's warning and critical thresholds.
+    required: false
+    default: ""
+  message:
+    description: Text sent with the ping. Defaults to the workflow name, run number, result and a link to the run.
+    required: false
+    default: ""
+  retries:
+    description: How many times to retry after a network error, a 429 or a 5xx response.
+    required: false
+    default: "3"
+  timeout:
+    description: Seconds to wait for each request.
+    required: false
+    default: "10"
+  fail-on-error:
+    description: Fail this step when the ping can't be delivered. Off by default, so monitoring never breaks your job.
+    required: false
+    default: "false"
+
+outputs:
+  http-status:
+    description: The HTTP status of the last request, or empty when nothing was sent.
+    value: ${{ steps.ping.outputs.http-status }}
+
+runs:
+  using: composite
+  steps:
+    - id: ping
+      shell: bash
+      run: '"$GITHUB_ACTION_PATH/ping.sh"'
+      env:
+        INPUT_PING_URL: ${{ inputs.ping-url }}
+        INPUT_STATUS: ${{ inputs.status }}
+        INPUT_VALUE: ${{ inputs.value }}
+        INPUT_MESSAGE: ${{ inputs.message }}
+        INPUT_RETRIES: ${{ inputs.retries }}
+        INPUT_TIMEOUT: ${{ inputs.timeout }}
+        INPUT_FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
